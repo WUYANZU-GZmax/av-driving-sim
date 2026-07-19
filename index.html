@@ -292,14 +292,21 @@
         const trafficLights = [];
         function makeTrafficLight(x, z, rotY) {
             const group = new THREE.Group(); group.position.set(x,0,z); group.rotation.y=rotY;
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.15,8,12), new THREE.MeshStandardMaterial({color:0x2a3a4a,roughness:0.4,metalness:0.6})); pole.position.y=4; pole.castShadow=true; group.add(pole);
-            const box = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.8,0.5), new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:0.3,metalness:0.5})); box.position.set(0,7.8,0.2); box.castShadow=true; group.add(box);
-            const lights=[]; const colors=[0xff0000,0xffcc00,0x00ff44]; const pos=[0.5,0,-0.5];
+            const metalMat = new THREE.MeshStandardMaterial({color:0x2b3a4a, roughness:0.4, metalness:0.7});
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,9,12), metalMat); pole.position.y=4.5; pole.castShadow=true; group.add(pole);
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.16,0.3), metalMat); cap.position.y=9.05; group.add(cap);
+            // 信号灯头
+            const head = new THREE.Group(); head.position.set(0,8.0,0.22); group.add(head);
+            const housing = new THREE.Mesh(new THREE.BoxGeometry(0.46,1.7,0.42), new THREE.MeshStandardMaterial({color:0x0e1116, roughness:0.35, metalness:0.5})); housing.castShadow=true; head.add(housing);
+            const visorMat = new THREE.MeshStandardMaterial({color:0x05070a, roughness:0.5});
+            const colors=[0xff2d2d,0xffd21f,0x23e06b]; const pos=[0.55,0,-0.55];
+            const lights=[];
             for (let i=0;i<3;i++){
-                const m = new THREE.Mesh(new THREE.CircleGeometry(0.18,24), new THREE.MeshStandardMaterial({color:0x222222,emissive:colors[i],emissiveIntensity:0.05}));
-                m.position.set(0,7.8+pos[i],0.46); m.rotation.y=Math.PI/2; group.add(m); lights.push(m);
-                const sp = new THREE.Sprite(new THREE.SpriteMaterial({color:colors[i],transparent:true,opacity:0,blending:THREE.AdditiveBlending}));
-                sp.scale.set(0.8,0.8,0.8); sp.position.set(0,7.8+pos[i],0.55); group.add(sp); lights.push(sp);
+                const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.2,20), visorMat); visor.rotation.x=Math.PI/2; visor.position.set(0,pos[i],0.18); head.add(visor);
+                const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.15,24), new THREE.MeshStandardMaterial({color:0x101010, emissive:colors[i], emissiveIntensity:0.06})); lamp.position.set(0,pos[i],0.3); head.add(lamp);
+                const sp = new THREE.Sprite(new THREE.SpriteMaterial({color:colors[i], transparent:true, opacity:0, blending:THREE.AdditiveBlending}));
+                sp.scale.set(0.95,0.95,0.95); sp.position.set(0,pos[i],0.4); head.add(sp);
+                lights.push(lamp, sp);
             }
             trafficLights.push({group,lights});
             return group;
@@ -327,7 +334,7 @@
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200,1200), new THREE.MeshStandardMaterial({color:0x1a2a1a,roughness:1}));
         ground.rotation.x=-Math.PI/2; ground.position.y=-0.05; ground.receiveShadow=true; scene.add(ground);
 
-        function makeTree(x,z){ const g=new THREE.Group(); const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.5,3,8), new THREE.MeshStandardMaterial({color:0x5a4632,roughness:0.9})); trunk.position.y=1.5; trunk.castShadow=true; g.add(trunk); const leaves=new THREE.Mesh(new THREE.ConeGeometry(2.5,5,8), new THREE.MeshStandardMaterial({color:0x2a6a3a,roughness:0.8})); leaves.position.y=4.5; leaves.castShadow=true; g.add(leaves); g.position.set(x,0,z); scene.add(g); }
+        function makeTree(x,z){ const g=new THREE.Group(); const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.26,1.5,8), new THREE.MeshStandardMaterial({color:0x5a4632,roughness:0.9})); trunk.position.y=0.75; trunk.castShadow=true; g.add(trunk); const leaves=new THREE.Mesh(new THREE.ConeGeometry(1.2,2.8,8), new THREE.MeshStandardMaterial({color:0x2a6a3a,roughness:0.8})); leaves.position.y=2.3; leaves.castShadow=true; g.add(leaves); g.position.set(x,0,z); scene.add(g); }
         for (let z=-MAIN_Z_HALF; z<=MAIN_Z_HALF; z+=18){ makeTree(-HALF-14-Math.random()*6, z+(Math.random()-0.5)*5); makeTree(HALF+14+Math.random()*6, z+(Math.random()-0.5)*5); }
         INTERSECTIONS.forEach(zc=>{ for(let x=-CROSS_X_HALF;x<=CROSS_X_HALF;x+=18){ if(Math.abs(x)<HALF+6) continue; makeTree(x+(Math.random()-0.5)*5, zc-HALF-14-Math.random()*6); makeTree(x+(Math.random()-0.5)*5, zc+HALF+14+Math.random()*6); } });
 
