@@ -91,6 +91,10 @@
                             <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="toggle-lidar" class="accent-blue-500"><span>LiDAR 环</span></label>
                             <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="toggle-box" checked class="accent-blue-500"><span>目标框</span></label>
                         </div>
+                        <div class="mt-2">车辆显示</div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="toggle-solid" checked class="accent-blue-500"><span>实体车辆</span></label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -396,6 +400,7 @@
         document.getElementById('btn-view').addEventListener('click',toggleCameraMode);
         document.getElementById('toggle-lidar').addEventListener('change',e=>{ if(ego.mesh.userData.lidarRing) ego.mesh.userData.lidarRing.visible=e.target.checked; });
         document.getElementById('toggle-box').addEventListener('change',e=>{ detectionBoxes.forEach(b=>b.visible=e.target.checked); egoBox.visible=e.target.checked; });
+        document.getElementById('toggle-solid').addEventListener('change',e=>{ const show=e.target.checked; ego.mesh.visible=show; trafficCars.forEach(c=>c.mesh.visible=show); });
         window.togglePanel = function(id){ const el=document.getElementById(id); if(el) el.classList.toggle('collapsed'); };
 
         // ============ CAMERA (orbit 始终可用) ============
