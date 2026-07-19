@@ -64,7 +64,7 @@
             <button class="panel-toggle w-full flex items-center justify-between px-3 py-2 hover:bg-white/10 transition text-white text-xs font-semibold" onclick="togglePanel('panel-map')">
                 <span>🗺 小地图</span><span class="chevron text-white/60">▾</span>
             </button>
-            <div class="panel-body"><canvas id="map-canvas" width="200" height="200"></canvas></div>
+            <div class="panel-body"><canvas id="map-canvas" width="220" height="220"></canvas></div>
         </div>
     </div>
 
@@ -178,9 +178,9 @@
         // ============ ROAD NETWORK ============
         const ROAD_WIDTH = 24, LANE_COUNT = 4, LANE_WIDTH = ROAD_WIDTH / LANE_COUNT;
         const HALF = ROAD_WIDTH / 2;
-        const MAIN_Z_HALF = 280;            // 主路沿 Z 轴： -280 .. 280
+        const MAIN_Z_HALF = 480;            // 主路沿 Z 轴： -480 .. 480
         const CROSS_X_HALF = 180;           // 交叉路沿 X 轴： -180 .. 180
-        const INTERSECTIONS = [-90, 90];    // 两个十字路口
+        const INTERSECTIONS = [-375,-225,-75,75,225,375];  // 6 个十字路口（原有 2 个 + 扩展 4 个）
 
         const roadGroup = new THREE.Group(); scene.add(roadGroup);
 
@@ -260,7 +260,7 @@
         for (let lane=0;lane<LANE_COUNT;lane++){
             const x = -HALF + lane*LANE_WIDTH + LANE_WIDTH/2;
             const dir = lane < LANE_COUNT/2 ? -1 : 1;
-            for (let z=-200; z<=200; z+=80){
+            for (let z=-440; z<=440; z+=80){
                 if (INTERSECTIONS.some(zc=>Math.abs(z-zc)<HALF+8)) continue;
                 const a=new THREE.Mesh(arrowGeo, arrowMat.clone()); a.rotation.x=-Math.PI/2; a.rotation.z = dir===-1?Math.PI:0; a.position.set(x,0.022,z); roadGroup.add(a);
             }
@@ -316,6 +316,8 @@
         }
         makeSign(HALF+3,-140,'speed',Math.PI/2); makeSign(-HALF-3,140,'speed',-Math.PI/2);
         makeSign(HALF+3,140,'stop',Math.PI/2); makeSign(-HALF-3,-140,'no-entry',-Math.PI/2);
+        makeSign(HALF+3,-340,'speed',Math.PI/2); makeSign(-HALF-3,340,'speed',-Math.PI/2);
+        makeSign(HALF+3,300,'stop',Math.PI/2); makeSign(-HALF-3,-300,'no-entry',-Math.PI/2);
 
         // ============ ENVIRONMENT ============
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200,1200), new THREE.MeshStandardMaterial({color:0x1a2a1a,roughness:1}));
@@ -326,10 +328,11 @@
         INTERSECTIONS.forEach(zc=>{ for(let x=-CROSS_X_HALF;x<=CROSS_X_HALF;x+=18){ if(Math.abs(x)<HALF+6) continue; makeTree(x+(Math.random()-0.5)*5, zc-HALF-14-Math.random()*6); makeTree(x+(Math.random()-0.5)*5, zc+HALF+14+Math.random()*6); } });
 
         // 路灯
-        for (let z=-200; z<=200; z+=50){ [-1,1].forEach((s,i)=>{ const x=s*(HALF+5); const lg=new THREE.Group(); lg.position.set(x,0,z); const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,9,8), new THREE.MeshStandardMaterial({color:0x3a4a5a,metalness:0.6,roughness:0.4})); pole.position.y=4.5; pole.castShadow=true; lg.add(pole); const arm=new THREE.Mesh(new THREE.BoxGeometry(3,0.15,0.15), new THREE.MeshStandardMaterial({color:0x3a4a5a,metalness:0.6,roughness:0.4})); arm.position.set((i===0?1.5:-1.5),9,0); lg.add(arm); const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.25,16,16), new THREE.MeshStandardMaterial({color:0xffffee,emissive:0xffaa55,emissiveIntensity:2})); bulb.position.set((i===0?3:-3),8.8,0); lg.add(bulb); const pl=new THREE.PointLight(0xffaa55,3,25); pl.position.set((i===0?3:-3),8.5,0); lg.add(pl); scene.add(lg); }); }
+        for (let z=-440; z<=440; z+=50){ [-1,1].forEach((s,i)=>{ const x=s*(HALF+5); const lg=new THREE.Group(); lg.position.set(x,0,z); const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,9,8), new THREE.MeshStandardMaterial({color:0x3a4a5a,metalness:0.6,roughness:0.4})); pole.position.y=4.5; pole.castShadow=true; lg.add(pole); const arm=new THREE.Mesh(new THREE.BoxGeometry(3,0.15,0.15), new THREE.MeshStandardMaterial({color:0x3a4a5a,metalness:0.6,roughness:0.4})); arm.position.set((i===0?1.5:-1.5),9,0); lg.add(arm); const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.25,16,16), new THREE.MeshStandardMaterial({color:0xffffee,emissive:0xffaa55,emissiveIntensity:2})); bulb.position.set((i===0?3:-3),8.8,0); lg.add(bulb); const pl=new THREE.PointLight(0xffaa55,3,25); pl.position.set((i===0?3:-3),8.5,0); lg.add(pl); scene.add(lg); }); }
 
         // 建筑
-        for (let i=0;i<40;i++){ const w=10+Math.random()*20,h=0.5+Math.random()*1.1,d=10+Math.random()*20; const onX = Math.random()>0.5; const x = onX? (Math.random()>0.5?1:-1)*(HALF+25+Math.random()*180) : (Math.random()>0.5?1:-1)*(HALF+12+Math.random()*20); const z = onX? (Math.random()>0.5?1:-1)*(HALF+12+Math.random()*20) : -MAIN_Z_HALF-20+Math.random()*(MAIN_Z_HALF*2+40); const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color:0x1a2330,roughness:0.7,metalness:0.2})); b.position.set(x,h/2,z); b.castShadow=true; b.receiveShadow=true; scene.add(b); }
+        const buildingPositions=[];
+        for (let i=0;i<40;i++){ const w=10+Math.random()*20,h=0.5+Math.random()*1.1,d=10+Math.random()*20; const onX = Math.random()>0.5; const x = onX? (Math.random()>0.5?1:-1)*(HALF+25+Math.random()*180) : (Math.random()>0.5?1:-1)*(HALF+12+Math.random()*20); const z = onX? (Math.random()>0.5?1:-1)*(HALF+12+Math.random()*20) : -MAIN_Z_HALF-20+Math.random()*(MAIN_Z_HALF*2+40); const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color:0x1a2330,roughness:0.7,metalness:0.2})); b.position.set(x,h/2,z); b.castShadow=true; b.receiveShadow=true; scene.add(b); buildingPositions.push({x,z,w,d}); }
 
         // ============ VEHICLES ============
         function createVehicle(color, isEgo){
@@ -417,48 +420,56 @@
             trafficLights.forEach(tl=>{ for(let i=0;i<3;i++){ const m=tl.lights[i*2], sp=tl.lights[i*2+1]; const act=(state===0&&i===0)||(state===1&&i===2)||(state===2&&i===1); m.material.emissiveIntensity=act?3:0.05; m.material.color.setHex(act?m.material.emissive.getHex():0x222222); sp.material.opacity=act?0.6:0; } });
         }
 
-        // ============ MINI MAP ============
+        // ============ MINI MAP（高德简化风） ============
         const mapCanvas=document.getElementById('map-canvas'); const mapCtx=mapCanvas.getContext('2d');
-        const RANGE_X=460, RANGE_Z=660;
-        const w2mx=x=> mapCanvas.width*(0.5 + x/RANGE_X);
-        const w2mz=z=> mapCanvas.height*(0.5 + z/RANGE_Z);
-        function drawMiniMap(){
-            const ctx=mapCtx,w=mapCanvas.width,h=mapCanvas.height; ctx.clearRect(0,0,w,h); ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,w,h);
-            // 主路
-            ctx.fillStyle='#2a2a3a'; ctx.fillRect(w2mx(-HALF),w2mz(-MAIN_Z_HALF),HALF*2/RANGE_X*w,HALF*2/RANGE_Z*h);
-            // 交叉路
-            INTERSECTIONS.forEach(zc=>{ ctx.fillRect(w2mx(-CROSS_X_HALF),w2mz(zc-HALF),(CROSS_X_HALF*2)/RANGE_X*w,(HALF*2)/RANGE_Z*h); });
+        const MAP_W=mapCanvas.width, MAP_H=mapCanvas.height;
+        // 整个世界范围（用于默认 fit 整张路网）
+        const WORLD_W = CROSS_X_HALF*2 + 120, WORLD_H = MAIN_Z_HALF*2 + 120;
+        const scaleFit = Math.min(MAP_W/WORLD_W, MAP_H/WORLD_H);
+        let mapZoom = 1;                                  // 1 = 完整路网；滚轮可放大/缩小
+        const mscale = ()=> scaleFit*mapZoom;
+        // 以自车为中心（高德导航视角）：世界坐标 -> 画布像素
+        const w2mx = x => MAP_W/2 + (x - carState.x)*mscale();
+        const w2mz = z => MAP_H/2 + (z - carState.z)*mscale();
+        // 小地图滚轮缩放
+        mapCanvas.addEventListener('wheel', e=>{ e.preventDefault(); mapZoom *= (e.deltaY<0?1.15:1/1.15); mapZoom=Math.max(0.6,Math.min(6,mapZoom)); }, {passive:false});
 
-            // ===== 车道线 =====
-            // 主路纵向车道线（沿 Z 方向）：x = -LANE_WIDTH, 0, +LANE_WIDTH
-            const xs = [-LANE_WIDTH, 0, LANE_WIDTH];
-            // 主路可绘制 z 区段（避开十字路口）
-            let cursor = -MAIN_Z_HALF; const segZ = [];
-            INTERSECTIONS.slice().sort((a,b)=>a-b).forEach(zc=>{ segZ.push([cursor, zc-HALF]); cursor=zc+HALF; });
-            segZ.push([cursor, MAIN_Z_HALF]);
-            ctx.lineWidth = 1;
-            xs.forEach(x=>{
-                ctx.strokeStyle = (x===0) ? '#fbbf24' : '#cbd5e1';      // 中心黄线 / 白色虚线
-                ctx.setLineDash(x===0 ? [] : [3,3]);
-                segZ.forEach(([z0,z1])=>{
-                    const mx=w2mx(x), mz0=w2mz(z0), mz1=w2mz(z1);
-                    ctx.beginPath(); ctx.moveTo(mx,mz0); ctx.lineTo(mx,mz1); ctx.stroke();
-                });
-            });
-            // 交叉路横向车道线（沿 X 方向，避开主路）
-            ctx.strokeStyle='#cbd5e1'; ctx.setLineDash([3,3]);
-            INTERSECTIONS.forEach(zc=>{
-                [-LANE_WIDTH,0,LANE_WIDTH].forEach(zoff=>{
-                    const mz=w2mz(zc+zoff);
-                    ctx.beginPath(); ctx.moveTo(w2mx(-CROSS_X_HALF),mz); ctx.lineTo(w2mx(-HALF),mz); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(w2mx(HALF),mz); ctx.lineTo(w2mx(CROSS_X_HALF),mz); ctx.stroke();
-                });
-            });
-            ctx.setLineDash([]);
+        function drawRoadBand(x0,z0,x1,z1){ const a=w2mx(x0),b=w2mz(z0),c=w2mx(x1),d=w2mz(z1); mapCtx.fillRect(Math.min(a,c),Math.min(b,d),Math.abs(c-a),Math.abs(d-b)); }
+        function drawLaneLines(){
+            // 主路纵向车道线（沿 Z），避开路口
+            const xs=[-LANE_WIDTH,0,LANE_WIDTH]; let cursor=-MAIN_Z_HALF; const segZ=[];
+            INTERSECTIONS.slice().sort((a,b)=>a-b).forEach(zc=>{ segZ.push([cursor,zc-HALF]); cursor=zc+HALF; }); segZ.push([cursor,MAIN_Z_HALF]);
+            xs.forEach(x=>{ segZ.forEach(([z0,z1])=>{ mapCtx.beginPath(); mapCtx.moveTo(w2mx(x),w2mz(z0)); mapCtx.lineTo(w2mx(x),w2mz(z1)); mapCtx.stroke(); }); });
+            // 交叉路横向车道线（沿 X），避开主路
+            INTERSECTIONS.forEach(zc=>{ [-LANE_WIDTH,0,LANE_WIDTH].forEach(zoff=>{ const mz=w2mz(zc+zoff); mapCtx.beginPath(); mapCtx.moveTo(w2mx(-CROSS_X_HALF),mz); mapCtx.lineTo(w2mx(-HALF),mz); mapCtx.stroke(); mapCtx.beginPath(); mapCtx.moveTo(w2mx(HALF),mz); mapCtx.lineTo(w2mx(CROSS_X_HALF),mz); mapCtx.stroke(); }); });
+        }
+        function drawMiniMap(){
+            const ctx=mapCtx, w=MAP_W, h=MAP_H;
+            ctx.clearRect(0,0,w,h);
+            // 背景（高德浅色）
+            ctx.fillStyle='#e9edf0'; ctx.fillRect(0,0,w,h);
+            // 道路底（灰色描边，模拟高德路网 casing）
+            ctx.fillStyle='#cfd8e0';
+            drawRoadBand(-HALF,-MAIN_Z_HALF,HALF,MAIN_Z_HALF);
+            INTERSECTIONS.forEach(zc=> drawRoadBand(-CROSS_X_HALF,zc-HALF,CROSS_X_HALF,zc+HALF));
+            // 路面（白色）
+            ctx.fillStyle='#ffffff';
+            drawRoadBand(-HALF+1.2,-MAIN_Z_HALF,HALF-1.2,MAIN_Z_HALF);
+            INTERSECTIONS.forEach(zc=> drawRoadBand(-CROSS_X_HALF,zc-HALF+1.2,CROSS_X_HALF,zc+HALF-1.2));
+            // 车道线（细浅色虚线）
+            ctx.strokeStyle='#c2cbd4'; ctx.lineWidth=0.5; ctx.setLineDash([3,3]); drawLaneLines(); ctx.setLineDash([]);
+            // 建筑（浅灰块）
+            ctx.fillStyle='#d3d9df';
+            buildingPositions.forEach(b=>{ const bx=w2mx(b.x-b.w/2), bz=w2mz(b.z-b.d/2), bw=b.w*mscale(), bd=b.d*mscale(); if(bx+bw<0||bz+bd<0||bx>w||bz>h) return; ctx.fillRect(bx,bz,bw,bd); });
             // 交通车
-            trafficCars.forEach(car=>{ const mx=w2mx(car.mesh.position.x), mz=w2mz(car.mesh.position.z); ctx.fillStyle=car.cross?'#f59e0b':'#3b82f6'; ctx.fillRect(mx-1.5,mz-2,3,4); });
-            // 自车
-            const ex=w2mx(carState.x), ez=w2mz(carState.z); ctx.save(); ctx.translate(ex,ez); ctx.rotate(Math.PI - carState.rotation); ctx.fillStyle='#e11d48'; ctx.fillRect(-2.5,-4,5,8); ctx.restore();
+            trafficCars.forEach(car=>{ const mx=w2mx(car.mesh.position.x), mz=w2mz(car.mesh.position.z); ctx.fillStyle=car.cross?'#f59e0b':'#3b82f6'; ctx.fillRect(mx-1.2,mz-1.6,2.4,3.2); });
+            // 自车（红色箭头，朝向行进方向）
+            const ex=w2mx(carState.x), ez=w2mz(carState.z);
+            ctx.save(); ctx.translate(ex,ez); ctx.rotate(-carState.rotation);
+            ctx.fillStyle='#e11d48'; ctx.beginPath(); ctx.moveTo(0,6); ctx.lineTo(-4,-5); ctx.lineTo(0,-2); ctx.lineTo(4,-5); ctx.closePath(); ctx.fill();
+            ctx.restore();
+            // 缩放级别提示
+            ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.font='9px Inter, sans-serif'; ctx.fillText('x'+mapZoom.toFixed(1), 4, h-4);
         }
 
         // ============ HUD ============
