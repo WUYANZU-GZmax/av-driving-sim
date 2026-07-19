@@ -34,8 +34,24 @@
         .route-label { position:absolute; top:0; left:0; padding:4px 8px; background:rgba(15,23,42,0.85); border:1px solid rgba(255,255,255,0.12); border-radius:6px; color:#fff; font-size:10px; line-height:1.4; pointer-events:none; transform:translate(-50%, -120%); white-space:nowrap; }
         .route-label .dist { color:#05AC42; font-weight:700; }
         .route-label .risk { color:#CF7432; }
-        .toast { position:absolute; bottom:120px; left:50%; transform:translateX(-50%); padding:8px 16px; background:rgba(15,23,42,0.9); color:#fff; border-radius:8px; font-size:12px; border:1px solid rgba(255,255,255,0.1); opacity:0; transition:opacity .3s; pointer-events:none; z-index:40; }
+        /* 代价信息框 / 灰色连线 / 删除途经点 */
+        .route-cost { position:absolute; top:0; left:0; padding:5px 9px; border-radius:7px; font-size:10px; line-height:1.35; color:#fff; pointer-events:none; white-space:nowrap; box-shadow:0 2px 10px rgba(0,0,0,.45); }
+        .route-cost.rec { background:rgba(5,172,66,.85); border:1px solid rgba(5,172,66,.95); }
+        .route-cost.risk { background:rgba(207,116,50,.88); border:1px solid rgba(207,116,50,.98); }
+        .route-cost .rc-dist { font-weight:700; }
+        .route-cost .rc-risk { opacity:.95; margin-top:1px; }
+        .route-cost.hl { outline:2px solid #fff; transform:translate(-50%,-100%) scale(1.06); }
+        .route-connector { position:absolute; top:0; left:0; width:1px; background:rgba(200,208,218,.75); pointer-events:none; }
+        .wp-delete { position:absolute; transform:translate(-50%,-50%); z-index:30; padding:3px 8px; border-radius:6px; background:rgba(220,38,38,.92); color:#fff; font-size:11px; font-weight:600; border:1px solid rgba(255,255,255,.35); cursor:pointer; }
+        .wp-delete.hidden { display:none; }
+        /* Toast 标题 + 详情 */
+        .toast { position:absolute; bottom:120px; left:50%; transform:translateX(-50%); max-width:360px; padding:9px 16px; background:rgba(15,23,42,0.92); color:#fff; border-radius:8px; font-size:12px; border:1px solid rgba(255,255,255,0.12); opacity:0; transition:opacity .3s; pointer-events:none; z-index:60; text-align:center; }
         .toast.show { opacity:1; }
+        .toast-title { font-weight:700; font-size:12px; }
+        .toast-detail { font-size:11px; opacity:.85; margin-top:2px; }
+        /* 确认弹窗按推荐/风险着色 */
+        .route-dialog-backdrop.rec .glass-panel { border:1px solid #05AC42; }
+        .route-dialog-backdrop.risk .glass-panel { border:1px solid #CF7432; }
     </style>
 </head>
 <body>
@@ -123,8 +139,8 @@
                 <span id="route-status" class="text-white/60 text-xs">未启动</span>
             </div>
             <div class="p-3 flex items-center gap-2">
-                <button id="btn-change-lane" class="route-btn">换车道 (Shift+L)</button>
-                <button id="btn-new-dest" class="route-btn">新设终点 (Shift+N)</button>
+                <button id="btn-change-lane" class="route-btn">换车道 (L)</button>
+                <button id="btn-new-dest" class="route-btn">新设终点 (N / Shift+左键)</button>
                 <button id="btn-exit-route" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition">退出 (Esc)</button>
             </div>
         </div>
@@ -169,6 +185,9 @@
 
     <!-- Toast 提示 -->
     <div id="toast" class="toast"></div>
+
+    <!-- 删除途经点按钮 -->
+    <button id="wp-delete" class="wp-delete hidden">✕ 删除途经点</button>
 
     <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -471,9 +490,20 @@
             if (carState.x<-HALF+0.8) carState.x=-HALF+0.8; if (carState.x>HALF-0.8) carState.x=HALF-0.8;
             if (carState.z<-MAIN_Z_HALF+2){ carState.z=-MAIN_Z_HALF+2; carState.velocity*=0.5; } if (carState.z>MAIN_Z_HALF-2){ carState.z=MAIN_Z_HALF-2; carState.velocity*=0.5; }
         }
-        function resetVehicle(){ carState.x=START_POS.x; carState.z=START_POS.z; carState.rotation=START_POS.rot; carState.velocity=0; carState.steering=0; carState.throttle=0; carState.gear=1; }
+        function resetVehicle(){ carState.x=START_POS.x; carState.z=START_POS.z; carState.rotation=START_POS.rot; carState.velocity=0; carState.steering=0; carState.throttle=0; carState.gear=1; if (typeof ROUTE!=='undefined' && ROUTE.mode!=='NONE') exitRouteMode('reset'); }
 
-        window.addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); if(k==='w'||e.key==='ArrowUp')keys.w=true; if(k==='a'||e.key==='ArrowLeft')keys.a=true; if(k==='s'||e.key==='ArrowDown')keys.s=true; if(k==='d'||e.key==='ArrowRight')keys.d=true; if(e.code==='Space'){keys.space=true;e.preventDefault();} if(k==='r')resetVehicle(); if(k==='c')toggleCameraMode(); if(e.key==='Escape')exitRouteMode('esc'); if(e.shiftKey&&k==='l'){e.preventDefault();enterRouteMode('LANE');} if(e.shiftKey&&k==='n'){e.preventDefault();enterRouteMode('DEST');} });
+        window.addEventListener('keydown',e=>{ const k=e.key.toLowerCase();
+            if (k==='w'||e.key==='ArrowUp'){ if(ROUTE.mode!=='NONE') exitRouteMode('other-cmd'); keys.w=true; }
+            else if (k==='a'||e.key==='ArrowLeft'){ if(ROUTE.mode!=='NONE') exitRouteMode('other-cmd'); keys.a=true; }
+            else if (k==='s'||e.key==='ArrowDown'){ if(ROUTE.mode!=='NONE') exitRouteMode('other-cmd'); keys.s=true; }
+            else if (k==='d'||e.key==='ArrowRight'){ if(ROUTE.mode!=='NONE') exitRouteMode('other-cmd'); keys.d=true; }
+            else if (e.code==='Space'){ if(ROUTE.mode!=='NONE') exitRouteMode('other-cmd'); keys.space=true; e.preventDefault(); }
+            if (k==='r') resetVehicle();
+            if (k==='c') toggleCameraMode();
+            if (e.key==='Escape') exitRouteMode('esc');
+            if (k==='l'){ e.preventDefault(); enterRouteMode('LANE'); }
+            if (k==='n'){ e.preventDefault(); enterRouteMode('DEST'); }
+        });
         window.addEventListener('keyup',e=>{ const k=e.key.toLowerCase(); if(k==='w'||e.key==='ArrowUp')keys.w=false; if(k==='a'||e.key==='ArrowLeft')keys.a=false; if(k==='s'||e.key==='ArrowDown')keys.s=false; if(k==='d'||e.key==='ArrowRight')keys.d=false; if(e.code==='Space')keys.space=false; });
         const sb=(id,key)=>{ const b=document.getElementById(id); const s=e=>{e.preventDefault();ui[key]=true;b.classList.add('active');}; const en=e=>{e.preventDefault();ui[key]=false;b.classList.remove('active');}; b.addEventListener('mousedown',s); b.addEventListener('mouseup',en); b.addEventListener('mouseleave',en); b.addEventListener('touchstart',s); b.addEventListener('touchend',en); };
         sb('btn-up','up'); sb('btn-down','down'); sb('btn-left','left'); sb('btn-right','right');
@@ -591,7 +621,7 @@
             routes: [], selectedRoute: null, hoveredRoute: null,
             routeGroup: new THREE.Group(), labelGroup: [],
             autoDrive: false, autoPath: [], autoIndex: 0, autoProgress: 0,
-            events: [], graph: null,
+            events: [], graph: null, excludedLane: null,
             startTime: 0, waypointTime: 0, routeSelectTime: 0, dispatchTime: 0
         };
         scene.add(ROUTE.routeGroup);
@@ -663,9 +693,9 @@
             return false;
         }
         function generateRoutes(){
-            const startIdx=snapToGraph(carState.x,carState.z);
-            const wpNode=ROUTE.waypoint && ROUTE.waypoint.userData ? ROUTE.waypoint.userData.graphNode : null;
-            const wpIdx = wpNode!==null ? wpNode : snapToGraph(ROUTE.waypoint.userData.pos.x, ROUTE.waypoint.userData.pos.z);
+            const startNodeIdx=snapToGraph(carState.x,carState.z);
+            const wp=ROUTE.waypoint.userData;
+            const wpIdx=wp.graphNode;
             let destIdx;
             if (ROUTE.mode==='LANE'){
                 const lane=Math.min(LANE_COUNT-1, Math.max(0, Math.round((carState.x+HALF)/LANE_WIDTH-0.5)));
@@ -674,41 +704,58 @@
             } else {
                 destIdx=snapToGraph(ROUTE.destination.x,ROUTE.destination.z);
             }
-            if (startIdx===-1 || wpIdx===-1 || destIdx===-1) { ROUTE.routes=[]; return; }
+            if (startNodeIdx===-1 || wpIdx===-1 || destIdx===-1){ ROUTE.routes=[]; return; }
 
-            const startVariants=[startIdx];
-            const startNode=ROUTE.graph.nodes[startIdx];
-            if (startNode.axis==='z') for (let lane=0;lane<LANE_COUNT;lane++){ if (lane===startNode.lane) continue; const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const idx=snapToGraph(x,startNode.z); if (idx!==-1 && !startVariants.includes(idx)) startVariants.push(idx); }
+            // 起点候选：当前车道 + 同向前方相邻车道（排除本行程已走过的车道，见 story 8）
+            const startVariants=[startNodeIdx];
+            const startNode=ROUTE.graph.nodes[startNodeIdx];
+            if (startNode.axis==='z') for (let lane=0;lane<LANE_COUNT;lane++){ if (lane===startNode.lane) continue; if (lane===ROUTE.excludedLane) continue; const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const idx=snapToGraph(x,startNode.z); if (idx!==-1 && !startVariants.includes(idx)) startVariants.push(idx); }
             const destVariants=[destIdx];
             const destNode=ROUTE.graph.nodes[destIdx];
             if (destNode.axis==='z') for (let lane=0;lane<LANE_COUNT;lane++){ if (lane===destNode.lane) continue; const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const idx=snapToGraph(x,destNode.z); if (idx!==-1 && !destVariants.includes(idx)) destVariants.push(idx); }
 
+            const straight=rdistance(carState, wp.pos);
             const candidates=[]; let id=0;
             startVariants.forEach(s=>{
                 destVariants.forEach(d=>{
                     const p1=dijkstra(s,wpIdx); const p2=dijkstra(wpIdx,d);
                     if (p1.length<2 || p2.length<2) return;
-                    const path=p1.concat(p2.slice(1)); path.forEach(p=>p.idx=p.idx); // keep idx
-                    const dist=pathLength(path); candidates.push({path,dist,id:id++,recommended:false,risks:[]});
+                    const leg1=pathLength(p1);
+                    // PRD 过滤规则：仅针对「ADV 到达途径点」这段，路线距离 > 直距×3+100m 视为极端绕路不展示
+                    if (leg1 > straight*3+100) return;
+                    const path=p1.concat(p2.slice(1));
+                    const dist=leg1+pathLength(p2);
+                    candidates.push({path,dist,leg1,id:id++,recommended:false,risks:[]});
                 });
             });
-            const straight=rdistance(carState,ROUTE.waypoint.userData.pos);
-            const filtered=candidates.filter(r=>r.dist<=straight*3+100);
-            filtered.sort((a,b)=>a.dist-b.dist);
+            // 去重 + 限量 ≤5
+            candidates.sort((a,b)=>a.dist-b.dist);
             const seen=new Set(), unique=[];
-            filtered.forEach(r=>{ const key=r.path.map(p=>p.idx).join(','); if (!seen.has(key)){ seen.add(key); unique.push(r); } });
+            candidates.forEach(r=>{ const key=r.path.map(p=>p.idx).join(','); if (!seen.has(key)){ seen.add(key); unique.push(r); } });
             const final=unique.slice(0,5);
             if (final.length>0){
                 const avg=final.reduce((s,r)=>s+r.dist,0)/final.length;
-                final.forEach((r,i)=>{
+                final.forEach(r=>{
                     r.risks=[];
                     if (r.dist>avg*1.2) r.risks.push('路线过长');
                     if (crossesCenterLine(r.path)) r.risks.push('压实线变道');
-                    if (!r.risks.length && i===0) r.recommended=true;
+                    if (hasUTurn(r.path)) r.risks.push('违反车道导向');
+                    r.recommended = r.risks.length===0;
                 });
             }
             ROUTE.routes=final;
-            logEvent('route_generate',{count:final.length,distances:final.map(r=>r.dist),recommended:final.map(r=>r.recommended)});
+            logEvent('route_generate',{count:final.length,distances:final.map(r=>Math.round(r.dist)),recommended:final.map(r=>r.recommended)});
+        }
+        // 行进方向出现明显反向（调头）视为违反车道导向
+        function hasUTurn(path){
+            let prevDir=null, rev=0;
+            for (let i=1;i<path.length;i++){
+                const dx=path[i].x-path[i-1].x, dz=path[i].z-path[i-1].z; const len=Math.hypot(dx,dz); if (len<1e-3) continue;
+                const dir=Math.atan2(dx,dz);
+                if (prevDir!==null){ let diff=Math.abs(dir-prevDir); if (diff>Math.PI) diff=2*Math.PI-diff; if (diff>Math.PI*0.85) rev++; }
+                prevDir=dir;
+            }
+            return rev>=2;
         }
 
         // ---- Drivable area ----
@@ -752,7 +799,15 @@
             ROUTE.waypointTime=performance.now(); ROUTE.status='selectingRoute';
             logEvent('waypoint_select',{x:pos.x,z:pos.z,dt:(ROUTE.waypointTime-ROUTE.startTime)/1000});
             generateRoutes(); drawRoutes();
-            showToast(`已生成 ${ROUTE.routes.length} 条候选路线`);
+            showToast('已生成候选路线', `共 ${ROUTE.routes.length} 条（推荐绿 / 风险橙），悬浮或点击查看`, 10000);
+        }
+        function deleteWaypoint(){
+            if (!ROUTE.waypoint) return;
+            ROUTE.routeGroup.remove(ROUTE.waypoint); ROUTE.waypoint=null;
+            clearRoutes(); ROUTE.routes=[]; ROUTE.selectedRoute=null; ROUTE.hoveredRoute=null;
+            ROUTE.status='selectingWaypoint';
+            document.getElementById('wp-delete').classList.add('hidden');
+            showToast('已删除途经点','再次鼠标左键点击蓝色区域重新选点', 10000);
         }
 
         // ---- Route visualization ----
@@ -765,36 +820,58 @@
         }
         function clearRoutes(){
             for (let i=ROUTE.routeGroup.children.length-1;i>=0;i--){ const c=ROUTE.routeGroup.children[i]; if (c.userData && c.userData.isRoute) ROUTE.routeGroup.remove(c); }
-            ROUTE.labelGroup.forEach(l=>l.label.remove()); ROUTE.labelGroup=[];
+            ROUTE.labelGroup.forEach(l=>{ l.label.remove(); if (l.connector) l.connector.remove(); }); ROUTE.labelGroup=[];
         }
         function drawRoutes(){
             clearRoutes();
             ROUTE.routes.forEach((r,idx)=>{
-                const pts=r.path.map(p=>new THREE.Vector3(p.x,0.35,p.z));
+                const pts=r.path.map(p=>new THREE.Vector3(p.x,0.4,p.z));
                 const curve=new THREE.CatmullRomCurve3(pts);
-                const geom=new THREE.TubeGeometry(curve,Math.max(16,pts.length*2),0.22,8,false);
+                // PRD：实线比 smart path 更粗
+                const geom=new THREE.TubeGeometry(curve,Math.max(24,pts.length*2),0.35,10,false);
                 const color=r.recommended?0x05AC42:0xCF7432;
-                const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9});
+                const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.92});
                 const mesh=new THREE.Mesh(geom,mat); mesh.userData={isRoute:true,routeIdx:idx};
                 ROUTE.routeGroup.add(mesh); r.mesh=mesh;
-                // label
+                // 代价信息框（绿色=推荐仅距离 / 橙色=距离+风险）+ 灰色连线
                 const mid=r.path[Math.floor(r.path.length/2)];
-                const div=document.createElement('div'); div.className='route-label';
-                div.innerHTML=`<div class="dist">${rformatDistance(r.dist)}</div>`+(r.risks.length?`<div class="risk">⚠ ${r.risks.join('、')}</div>`:'');
-                document.body.appendChild(div);
-                ROUTE.labelGroup.push({label:div,mid,idx});
+                const box=document.createElement('div'); box.className='route-cost '+(r.recommended?'rec':'risk');
+                box.innerHTML=`<div class="rc-dist">${rformatDistance(r.dist)}</div>`+(r.risks.length?`<div class="rc-risk">⚠ ${r.risks.join('、')}</div>`:'');
+                box.style.pointerEvents='none';
+                document.body.appendChild(box);
+                const conn=document.createElement('div'); conn.className='route-connector'; document.body.appendChild(conn);
+                ROUTE.labelGroup.push({label:box,connector:conn,mid,idx});
             });
         }
         function updateRouteLabels(){
-            ROUTE.labelGroup.forEach(item=>{
-                const p=new THREE.Vector3(item.mid.x,1.2,item.mid.z); p.project(camera);
+            // 路线代价框：投影到屏幕 + 动态避让（防止重叠）
+            const items=ROUTE.labelGroup.map(item=>{
+                const p=new THREE.Vector3(item.mid.x,0.5,item.mid.z); p.project(camera);
                 const x=(p.x*0.5+0.5)*window.innerWidth; const y=(-p.y*0.5+0.5)*window.innerHeight;
-                item.label.style.transform=`translate(-50%, -120%)`;
-                item.label.style.left=x+'px'; item.label.style.top=y+'px';
+                return {item,x,y,vis:p.z<1};
             });
+            items.sort((a,b)=>a.y-b.y);
+            for (let i=1;i<items.length;i++){ if (items[i].vis && items[i-1].vis){ const dy=items[i].y-items[i-1].y; if (dy<36 && Math.abs(items[i].x-items[i-1].x)<72) items[i].y=items[i-1].y+36; } }
+            items.forEach(o=>{
+                const {item,x,y,vis}=o;
+                if (!vis){ item.label.style.display='none'; item.connector.style.display='none'; return; }
+                item.label.style.display='block';
+                const boxH=item.label.offsetHeight||30;
+                item.label.style.left=x+'px'; item.label.style.top=(y-60)+'px'; item.label.style.transform='translate(-50%,-100%)';
+                item.connector.style.display='block';
+                item.connector.style.left=x+'px'; item.connector.style.top=(y-60+boxH)+'px'; item.connector.style.height=Math.max(0,60-boxH)+'px';
+            });
+            // 删除途经点按钮定位
+            const wpBtn=document.getElementById('wp-delete');
+            if (ROUTE.waypoint && ROUTE.waypoint.visible){
+                const p=new THREE.Vector3(ROUTE.waypoint.position.x,2.2,ROUTE.waypoint.position.z); p.project(camera);
+                wpBtn.style.left=((p.x*0.5+0.5)*window.innerWidth)+'px'; wpBtn.style.top=((-p.y*0.5+0.5)*window.innerHeight)+'px';
+                wpBtn.classList.remove('hidden');
+            } else wpBtn.classList.add('hidden');
         }
         function highlightRoute(idx){
-            ROUTE.routes.forEach((r,i)=>{ if (r.mesh) r.mesh.material.opacity=(i===idx||i===ROUTE.selectedRoute)?0.95:0.35; });
+            ROUTE.routes.forEach((r,i)=>{ if (r.mesh) r.mesh.material.opacity=(i===idx||i===ROUTE.selectedRoute)?1:0.3; });
+            ROUTE.labelGroup.forEach(l=> l.label.classList.toggle('hl', l.idx===idx || l.idx===ROUTE.selectedRoute));
         }
         function onRouteMouseMove(e){
             if (ROUTE.status!=='selectingRoute') return;
@@ -808,13 +885,18 @@
             if (ROUTE.status==='selectingWaypoint'){
                 const pos=getMouseWorldPos(e); if (!pos) return;
                 if (isInDrivableArea(pos.x,pos.z)) setWaypoint(pos);
-                else showToast('请在蓝色可行驶区域内选择路径点');
+                else showToast('请在蓝色可行驶区域内选择', '选择范围：车辆前100 / 左右100 / 后50 米', 10000);
                 return;
             }
             if (ROUTE.status==='selectingDestination'){
                 const pos=getMouseWorldPos(e); if (!pos) return;
-                ROUTE.destination={x:pos.x,z:pos.z}; ROUTE.drivableArea=createDrivableArea(); ROUTE.status='selectingWaypoint';
-                showToast('已设定终点，请在蓝色可行驶区域内选择途经点');
+                if (!isInDrivableArea(pos.x,pos.z)){ showToast('新设终点','请在蓝色可行驶区域内点击选择路线终点'); return; }
+                ROUTE.destination={x:pos.x,z:pos.z};
+                const s=snapToGraph(carState.x,carState.z), d=snapToGraph(pos.x,pos.z);
+                const p=dijkstra(s,d);
+                if (p.length<2){ showToast('新设终点','所选终点不可达，请重选其他区域'); return; }
+                ROUTE.status='selectingWaypoint';
+                showToast('新设终点','已选新终点且可达，在蓝色区域内选择途经点（鼠标左键），再次点击途径点可删除。按ESC可退出', 10000);
                 return;
             }
             if (ROUTE.status!=='selectingRoute') return;
@@ -837,7 +919,9 @@
             const riskRow=document.getElementById('dialog-risk-row');
             if (r.risks.length){ riskRow.classList.remove('hidden'); document.getElementById('dialog-risk').textContent=r.risks.join('、'); }
             else riskRow.classList.add('hidden');
-            document.getElementById('route-dialog').classList.remove('hidden');
+            const dlg=document.getElementById('route-dialog');
+            dlg.classList.remove('rec','risk'); dlg.classList.add(r.recommended?'rec':'risk');
+            dlg.classList.remove('hidden');
         }
         function closeConfirmDialog(){ document.getElementById('route-dialog').classList.add('hidden'); }
 
@@ -856,7 +940,7 @@
             ROUTE.autoProgress+=carState.speedMs*dt;
             if (ROUTE.autoProgress>=segLen){
                 ROUTE.autoProgress-=segLen; ROUTE.autoIndex++;
-                if (ROUTE.autoIndex>=ROUTE.autoPath.length-1){ ROUTE.autoDrive=false; carState.velocity=0; carState.throttle=0; showToast('已到达目的地'); return; }
+                if (ROUTE.autoIndex>=ROUTE.autoPath.length-1){ ROUTE.autoDrive=false; carState.velocity=0; carState.throttle=0; ROUTE.excludedLane=null; clearRoutes(); ROUTE.routes=[]; showToast('已到达目的地'); return; }
             }
             const t=Math.min(1,ROUTE.autoProgress/segLen);
             carState.x=p1.x+dx*t; carState.z=p1.z+dz*t; carState.rotation=Math.atan2(dx,dz);
@@ -864,26 +948,47 @@
         }
 
         // ---- Mode management ----
+        function hasDrivableArea(){
+            // 车辆是否在道路网上（可生成路线）。离最近路节点过远视为黑名单区域
+            const idx=snapToGraph(carState.x,carState.z);
+            if (idx===-1) return false;
+            const n=ROUTE.graph.nodes[idx]; return rdistance({x:carState.x,z:carState.z},n) < 40;
+        }
         function enterRouteMode(mode){
+            // PRD：进入即判定可行驶性，给出不同反馈
+            if (!hasDrivableArea()){
+                showToast(mode==='LANE'?'换车道':'新设终点','当前无可行驶区域（车辆在黑名单区域），请挪车至道路后再发起', 10000);
+                return;
+            }
             if (ROUTE.mode!=='NONE') exitRouteMode('switch');
             ROUTE.mode=mode; ROUTE.startTime=performance.now(); ROUTE.events=[]; ROUTE.autoDrive=false;
             ROUTE.routes=[]; ROUTE.selectedRoute=null; ROUTE.hoveredRoute=null; ROUTE.waypoint=null; ROUTE.destination=null;
-            if (mode==='LANE'){ ROUTE.status='selectingWaypoint'; ROUTE.drivableArea=createDrivableArea(); ROUTE.destination={x:carState.x,z:carState.z+400}; }
-            else { ROUTE.status='selectingDestination'; }
+            ROUTE.drivableArea=createDrivableArea();
+            if (mode==='LANE'){
+                ROUTE.status='selectingWaypoint';
+                const lane=Math.min(LANE_COUNT-1, Math.max(0, Math.round((carState.x+HALF)/LANE_WIDTH-0.5)));
+                const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; ROUTE.destination={x, z:carState.z+400};
+                showToast('换车道','在蓝色区域内选择途经点（鼠标左键），再次点击途径点可删除。按ESC可退出', 10000);
+            } else {
+                ROUTE.status='selectingDestination';
+                renderer.domElement.style.cursor='crosshair';
+                showToast('新设终点','鼠标左键点击蓝色区域选择路线终点，将替换现有路线终点。按ESC可退出', 10000);
+            }
             logEvent('mode_enter',{mode});
-            document.getElementById('route-status').textContent=mode==='LANE'?'换车道：请在蓝色区域内选点':'新设终点：请先点击终点';
+            document.getElementById('route-status').textContent=mode==='LANE'?'换车道：选择途经点':'新设终点：选择终点';
             document.getElementById('btn-change-lane').classList.toggle('active',mode==='LANE');
             document.getElementById('btn-new-dest').classList.toggle('active',mode==='DEST');
-            showToast(mode==='LANE'?'进入换车道模式':'进入新设终点模式');
             updateMetricsPanel();
         }
         function exitRouteMode(reason){
-            if (ROUTE.mode==='NONE') return;
-            clearRoutes();
+            if (ROUTE.mode==='NONE' && reason!=='dispatch') return;
+            if (reason!=='dispatch') clearRoutes();   // 下发后保留路线线作为执行轨迹
             if (ROUTE.drivableArea){ ROUTE.routeGroup.remove(ROUTE.drivableArea); ROUTE.drivableArea=null; }
             if (ROUTE.waypoint){ ROUTE.routeGroup.remove(ROUTE.waypoint); ROUTE.waypoint=null; }
+            document.getElementById('wp-delete').classList.add('hidden');
+            renderer.domElement.style.cursor='';
             logEvent('mode_exit',{mode:ROUTE.mode,reason});
-            ROUTE.mode='NONE'; ROUTE.status='idle'; ROUTE.autoDrive=false;
+            ROUTE.mode='NONE'; ROUTE.status='idle'; if (reason!=='dispatch') ROUTE.autoDrive=false; ROUTE.hoveredRoute=null; ROUTE.selectedRoute=null;
             document.getElementById('route-status').textContent='未启动';
             document.getElementById('btn-change-lane').classList.remove('active');
             document.getElementById('btn-new-dest').classList.remove('active');
@@ -908,14 +1013,21 @@
             const blob=new Blob([JSON.stringify(ROUTE.events,null,2)],{type:'application/json'});
             const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='route_metrics.json'; a.click(); URL.revokeObjectURL(url);
         }
-        function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+        let toastTimer=null;
+        function showToast(title, detail, ms=10000){
+            const t=document.getElementById('toast');
+            t.innerHTML=`<div class="toast-title">${title}</div>`+(detail?`<div class="toast-detail">${detail}</div>`:'');
+            t.classList.add('show');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer=setTimeout(()=>t.classList.remove('show'), ms);
+        }
 
         // ---- Minimap route overlay ----
         function drawRouteOnMiniMap(){
             if (ROUTE.mode==='NONE') return;
             if (ROUTE.drivableArea){
                 mapCtx.fillStyle='rgba(77,135,186,0.35)'; const pts=getDrivableWorldPolygon();
-                mapCtx.beginPath(); pts.forEach((p,i)=>{ if (i===0) mapCtx.moveTo(w2mx(p.x),w2mz(p.z)); else mapCtx.lineTo(w2mx(p.x),w2mz(p.z)); });
+                mapCtx.beginPath(); pts.forEach((p,i)=>{ const mx=w2mx(p.x),mz=w2mz(p.z); if (i===0) mapCtx.moveTo(mx,mz); else mapCtx.lineTo(mx,mz); });
                 mapCtx.closePath(); mapCtx.fill();
             }
             if (ROUTE.destination){ mapCtx.fillStyle='#CF7432'; const dx=w2mx(ROUTE.destination.x), dz=w2mz(ROUTE.destination.z); mapCtx.beginPath(); mapCtx.arc(dx,dz,4,0,Math.PI*2); mapCtx.fill(); }
@@ -923,10 +1035,12 @@
                 mapCtx.fillStyle='#05AC42'; const wx=w2mx(ROUTE.waypoint.userData.pos.x), wz=w2mz(ROUTE.waypoint.userData.pos.z);
                 mapCtx.beginPath(); mapCtx.arc(wx,wz,4,0,Math.PI*2); mapCtx.fill();
             }
-            ROUTE.routes.forEach(r=>{
-                mapCtx.strokeStyle=r.recommended?'#05AC42':'#CF7432'; mapCtx.lineWidth=r.recommended?2.5:1.5;
-                mapCtx.beginPath(); r.path.forEach((p,j)=>{ if (j===0) mapCtx.moveTo(w2mx(p.x),w2mz(p.z)); else mapCtx.lineTo(w2mx(p.x),w2mz(p.z)); });
-                mapCtx.stroke();
+            ROUTE.routes.forEach((r,i)=>{
+                const sel=(i===ROUTE.selectedRoute)||(i===ROUTE.hoveredRoute);
+                mapCtx.strokeStyle=r.recommended?'#05AC42':'#CF7432'; mapCtx.lineWidth=sel?3:1.5;
+                if (!sel && ROUTE.selectedRoute!==null) mapCtx.globalAlpha=0.4;
+                mapCtx.beginPath(); r.path.forEach((p,j)=>{ const mx=w2mx(p.x),mz=w2mz(p.z); if (j===0) mapCtx.moveTo(mx,mz); else mapCtx.lineTo(mx,mz); });
+                mapCtx.stroke(); mapCtx.globalAlpha=1;
             });
         }
 
@@ -936,13 +1050,18 @@
         document.getElementById('btn-exit-route').addEventListener('click',()=>exitRouteMode('button'));
         document.getElementById('dialog-confirm').addEventListener('click',()=>{
             const r=ROUTE.routes[ROUTE.selectedRoute]; ROUTE.dispatchTime=performance.now();
+            // story 8：记录原车道，本行程内该车道不再作为起点候选
+            ROUTE.excludedLane=Math.min(LANE_COUNT-1, Math.max(0, Math.round((carState.x+HALF)/LANE_WIDTH-0.5)));
             logEvent('route_dispatch',{dist:r.dist,recommended:r.recommended,options:{pickup:document.getElementById('opt-pickup').checked,blacklist:document.getElementById('opt-blacklist').checked}});
-            closeConfirmDialog(); startAutoDrive(r.path); exitRouteMode('dispatch'); showToast('路线已下发，车辆开始自动驾驶');
+            closeConfirmDialog(); startAutoDrive(r.path); exitRouteMode('dispatch'); showToast('路线已下发，车辆开始自动驾驶', '', 6000);
         });
         document.getElementById('dialog-cancel').addEventListener('click',closeConfirmDialog);
         document.getElementById('btn-export-metrics').addEventListener('click',exportMetrics);
         renderer.domElement.addEventListener('click',onRouteClick);
         renderer.domElement.addEventListener('mousemove',onRouteMouseMove);
+        // PRD：Shift+左键 = 新设终点（直接进入选终点模式）
+        renderer.domElement.addEventListener('mousedown',(e)=>{ if (e.shiftKey && ROUTE.mode==='NONE'){ e.preventDefault(); enterRouteMode('DEST'); } });
+        document.getElementById('wp-delete').addEventListener('click',deleteWaypoint);
 
         // ============ HUD ============
         const speedEl=document.getElementById('speed'), throttleEl=document.getElementById('throttle'), steeringEl=document.getElementById('steering'), gearEl=document.getElementById('gear');
