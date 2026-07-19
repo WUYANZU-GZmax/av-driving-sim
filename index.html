@@ -20,6 +20,8 @@
         .panel-toggle { cursor: pointer; user-select: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .panel-toggle .chevron { display:inline-block; transition: transform .2s ease; }
         .collapsed .panel-body { display: none; }
+        .map-resize { position:absolute; left:0; bottom:0; width:18px; height:18px; cursor:nwse-resize; background:linear-gradient(135deg, transparent 0 50%, rgba(255,255,255,0.55) 50% 100%); border-bottom-left-radius:8px; }
+        .map-resize:hover { background:linear-gradient(135deg, transparent 0 50%, rgba(120,180,255,0.85) 50% 100%); }
         .collapsed .panel-toggle { border-bottom: none; }
         .collapsed .panel-toggle .chevron { transform: rotate(-90deg); }
     </style>
@@ -64,7 +66,7 @@
             <button class="panel-toggle w-full flex items-center justify-between px-3 py-2 hover:bg-white/10 transition text-white text-xs font-semibold" onclick="togglePanel('panel-map')">
                 <span>🗺 小地图</span><span class="chevron text-white/60">▾</span>
             </button>
-            <div class="panel-body"><canvas id="map-canvas" width="220" height="220"></canvas></div>
+            <div class="panel-body" style="position:relative;"><canvas id="map-canvas" width="220" height="220"></canvas><div id="map-resize" class="map-resize" title="拖拽左下角调整小地图大小"></div></div>
         </div>
     </div>
 
@@ -272,7 +274,7 @@
 
         // 斑马线 + 停止线 + 路口
         const zebraTex = (()=>{ const c=document.createElement('canvas'); c.width=256;c.height=64; const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,256,64); ctx.fillStyle='#333'; for(let i=0;i<256;i+=32) ctx.fillRect(i+4,0,24,64); return new THREE.CanvasTexture(c); })();
-        function createIntersection(zc) {
+        function createIntersection(zc, idx) {
             const g = new THREE.Group();
             // 停止线（主路两侧）
             [-1,1].forEach(s=>{ const sl=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_WIDTH,0.4), new THREE.MeshStandardMaterial({color:0xffffff})); sl.rotation.x=-Math.PI/2; sl.position.set(0,0.02, zc + s*(HALF+1.2)); g.add(sl); });
@@ -281,16 +283,21 @@
             [-1,1].forEach(s=>{ const cw=new THREE.Mesh(cwGeo, new THREE.MeshStandardMaterial({map:zebraTex.clone(),transparent:true,roughness:0.8})); cw.rotation.x=-Math.PI/2; cw.position.set(0,0.02,zc+s*(HALF+5)); g.add(cw); });
             const cwGeoX = new THREE.PlaneGeometry(4, ROAD_WIDTH);
             [-1,1].forEach(s=>{ const cw=new THREE.Mesh(cwGeoX, new THREE.MeshStandardMaterial({map:zebraTex.clone(),transparent:true,roughness:0.8})); cw.rotation.x=-Math.PI/2; cw.rotation.z=Math.PI/2; cw.position.set(s*(HALF+5),0.02,zc); g.add(cw); });
-            // 四角信号灯
-            [[ -1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
-                g.add(makeTrafficLight(sx*(HALF+2), zc + sz*(HALF+2), Math.atan2(-sx, -sz)));
-            });
+            // 四向信号灯：主路（南北）与交叉路（东西）分属两组，相位互斥
+            const off = idx*2.4;
+            const lightDefs = [
+                { x:0,        z:zc-(HALF+2), rotY:0,         axis:'main' }, // 南：控制主路北行
+                { x:0,        z:zc+(HALF+2), rotY:Math.PI,   axis:'main' }, // 北：控制主路南行
+                { x:-(HALF+2),z:zc,          rotY:Math.PI/2, axis:'cross' },// 西：控制交叉路东行
+                { x:(HALF+2), z:zc,          rotY:-Math.PI/2,axis:'cross' },// 东：控制交叉路西行
+            ];
+            lightDefs.forEach(d=> g.add(makeTrafficLight(d.x, d.z, d.rotY, d.axis, off)));
             scene.add(g);
         }
 
         // ============ TRAFFIC LIGHT ============
         const trafficLights = [];
-        function makeTrafficLight(x, z, rotY) {
+        function makeTrafficLight(x, z, rotY, axis, offset) {
             const group = new THREE.Group(); group.position.set(x,0,z); group.rotation.y=rotY;
             const metalMat = new THREE.MeshStandardMaterial({color:0x2b3a4a, roughness:0.4, metalness:0.7});
             const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,9,12), metalMat); pole.position.y=4.5; pole.castShadow=true; group.add(pole);
@@ -308,10 +315,10 @@
                 sp.scale.set(0.95,0.95,0.95); sp.position.set(0,pos[i],0.4); head.add(sp);
                 lights.push(lamp, sp);
             }
-            trafficLights.push({group,lights});
+            trafficLights.push({group,lights,axis,offset:offset||0});
             return group;
         }
-        INTERSECTIONS.forEach(createIntersection);
+        INTERSECTIONS.forEach((zc, idx)=> createIntersection(zc, idx));
 
         // ============ ROAD SIGNS ============
         function makeSign(x,z,type,rotY){
@@ -427,24 +434,49 @@
         }
 
         let lightTimer=0;
+        const LIGHT_CYCLE=18;
+        function signalStates(t){
+            // 标准两相位：主路绿/黄 → 全红 → 交叉路绿/黄 → 全红
+            if (t < 7)    return [1,0];   // 主路绿、交叉路红
+            if (t < 8.5)  return [2,0];   // 主路黄
+            if (t < 9.5)  return [0,0];   // 全红清空
+            if (t < 16.5) return [0,1];   // 交叉路绿、主路红
+            if (t < 18)   return [0,2];   // 交叉路黄
+            return [0,0];                 // 全红
+        }
         function updateTrafficLights(dt){
-            lightTimer+=dt; const cycle=12; const phase=(lightTimer%cycle)/cycle; let state= phase<0.45?1:(phase<0.55?2:0);
-            trafficLights.forEach(tl=>{ for(let i=0;i<3;i++){ const m=tl.lights[i*2], sp=tl.lights[i*2+1]; const act=(state===0&&i===0)||(state===1&&i===2)||(state===2&&i===1); m.material.emissiveIntensity=act?3:0.05; m.material.color.setHex(act?m.material.emissive.getHex():0x222222); sp.material.opacity=act?0.6:0; } });
+            lightTimer+=dt;
+            trafficLights.forEach(tl=>{
+                const [ms, cs] = signalStates((lightTimer + tl.offset) % LIGHT_CYCLE);
+                const st = tl.axis==='main' ? ms : cs;
+                for(let i=0;i<3;i++){
+                    const m=tl.lights[i*2], sp=tl.lights[i*2+1];
+                    const act=(st===0&&i===0)||(st===1&&i===2)||(st===2&&i===1);
+                    m.material.emissiveIntensity=act?3:0.05;
+                    m.material.color.setHex(act?m.material.emissive.getHex():0x222222);
+                    sp.material.opacity=act?0.6:0;
+                }
+            });
         }
 
         // ============ MINI MAP（高德简化风） ============
         const mapCanvas=document.getElementById('map-canvas'); const mapCtx=mapCanvas.getContext('2d');
-        const MAP_W=mapCanvas.width, MAP_H=mapCanvas.height;
+        let MAP_W=mapCanvas.width, MAP_H=mapCanvas.height;
         // 整个世界范围（用于默认 fit 整张路网）
         const WORLD_W = CROSS_X_HALF*2 + 120, WORLD_H = MAIN_Z_HALF*2 + 120;
-        const scaleFit = Math.min(MAP_W/WORLD_W, MAP_H/WORLD_H);
         let mapZoom = 1;                                  // 1 = 完整路网；滚轮可放大/缩小
-        const mscale = ()=> scaleFit*mapZoom;
+        const mscale = ()=> Math.min(MAP_W/WORLD_W, MAP_H/WORLD_H)*mapZoom;
         // 以自车为中心（高德导航视角）：世界坐标 -> 画布像素
         const w2mx = x => MAP_W/2 + (x - carState.x)*mscale();
         const w2mz = z => MAP_H/2 + (z - carState.z)*mscale();
         // 小地图滚轮缩放
         mapCanvas.addEventListener('wheel', e=>{ e.preventDefault(); mapZoom *= (e.deltaY<0?1.15:1/1.15); mapZoom=Math.max(0.6,Math.min(6,mapZoom)); }, {passive:false});
+        // 小地图拖拽改变尺寸（左下角手柄：向左下拉大）
+        const mapResize=document.getElementById('map-resize');
+        let mapResizing=false, mapStartX=0, mapStartY=0, mapStartW=0, mapStartH=0;
+        mapResize.addEventListener('mousedown', e=>{ e.preventDefault(); e.stopPropagation(); mapResizing=true; mapStartX=e.clientX; mapStartY=e.clientY; mapStartW=mapCanvas.width; mapStartH=mapCanvas.height; });
+        window.addEventListener('mousemove', e=>{ if(!mapResizing) return; let nw=mapStartW-(e.clientX-mapStartX); let nh=mapStartH+(e.clientY-mapStartY); nw=Math.max(150,Math.min(560,nw)); nh=Math.max(150,Math.min(560,nh)); mapCanvas.width=nw; mapCanvas.height=nh; MAP_W=nw; MAP_H=nh; });
+        window.addEventListener('mouseup', ()=> mapResizing=false);
 
         function drawRoadBand(x0,z0,x1,z1){ const a=w2mx(x0),b=w2mz(z0),c=w2mx(x1),d=w2mz(z1); mapCtx.fillRect(Math.min(a,c),Math.min(b,d),Math.abs(c-a),Math.abs(d-b)); }
         function drawLaneLines(){
