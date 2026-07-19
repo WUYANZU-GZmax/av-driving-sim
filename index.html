@@ -24,6 +24,18 @@
         .map-resize:hover { background:linear-gradient(135deg, transparent 0 50%, rgba(120,180,255,0.85) 50% 100%); }
         .collapsed .panel-toggle { border-bottom: none; }
         .collapsed .panel-toggle .chevron { transform: rotate(-90deg); }
+        /* Route mode UI */
+        .route-panel { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:10; }
+        .route-btn { padding:6px 12px; border-radius:8px; background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.35); color:#bfdbfe; font-size:11px; font-weight:600; transition:all .15s; cursor:pointer; }
+        .route-btn:hover { background:rgba(59,130,246,0.35); }
+        .route-btn.active { background:rgba(59,130,246,0.55); color:#fff; }
+        .route-dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:100; }
+        .route-dialog-backdrop.hidden { display:none; }
+        .route-label { position:absolute; top:0; left:0; padding:4px 8px; background:rgba(15,23,42,0.85); border:1px solid rgba(255,255,255,0.12); border-radius:6px; color:#fff; font-size:10px; line-height:1.4; pointer-events:none; transform:translate(-50%, -120%); white-space:nowrap; }
+        .route-label .dist { color:#05AC42; font-weight:700; }
+        .route-label .risk { color:#CF7432; }
+        .toast { position:absolute; bottom:120px; left:50%; transform:translateX(-50%); padding:8px 16px; background:rgba(15,23,42,0.9); color:#fff; border-radius:8px; font-size:12px; border:1px solid rgba(255,255,255,0.1); opacity:0; transition:opacity .3s; pointer-events:none; z-index:40; }
+        .toast.show { opacity:1; }
     </style>
 </head>
 <body>
@@ -102,6 +114,61 @@
             </div>
         </div>
     </div>
+
+    <!-- 路线模式入口 / 状态 -->
+    <div id="panel-route" class="route-panel">
+        <div class="glass-panel rounded-2xl overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-4">
+                <span class="text-white text-xs font-semibold">🚩 路线模式</span>
+                <span id="route-status" class="text-white/60 text-xs">未启动</span>
+            </div>
+            <div class="p-3 flex items-center gap-2">
+                <button id="btn-change-lane" class="route-btn">换车道 (Shift+L)</button>
+                <button id="btn-new-dest" class="route-btn">新设终点 (Shift+N)</button>
+                <button id="btn-exit-route" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition">退出 (Esc)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 路线确认弹窗 -->
+    <div id="route-dialog" class="route-dialog-backdrop hidden">
+        <div class="glass-panel rounded-xl p-5 max-w-sm w-full text-white mx-4">
+            <h3 class="text-sm font-bold mb-3">确认该路线</h3>
+            <div class="text-xs text-white/70 mb-4 space-y-1">
+                <div>距离：<span id="dialog-dist" class="text-white font-semibold"></span></div>
+                <div id="dialog-risk-row" class="hidden text-orange-400">风险：<span id="dialog-risk"></span></div>
+            </div>
+            <div class="space-y-2 mb-4">
+                <label class="flex items-center gap-2 text-xs text-white/80 cursor-pointer"><input type="checkbox" id="opt-pickup" class="accent-blue-500"> 加 Pickup fence</label>
+                <label class="flex items-center gap-2 text-xs text-white/80 cursor-pointer"><input type="checkbox" id="opt-blacklist" class="accent-blue-500"> 软化 Blacklist</label>
+            </div>
+            <div class="flex gap-2">
+                <button id="dialog-confirm" class="flex-1 py-2 rounded-lg bg-green-600/80 hover:bg-green-600 text-white text-xs font-semibold transition">确认并下发</button>
+                <button id="dialog-cancel" class="flex-1 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 路线指标面板 -->
+    <div id="panel-metrics" class="absolute top-20 left-5 z-10 collapsed">
+        <div class="glass-panel rounded-xl overflow-hidden text-white">
+            <button class="panel-toggle w-full flex items-center justify-between px-4 py-2 hover:bg-white/10 transition" onclick="togglePanel('panel-metrics')">
+                <span class="text-xs font-semibold">📊 路线指标</span><span class="chevron text-white/60">▾</span>
+            </button>
+            <div class="panel-body p-3 text-xs space-y-2">
+                <div class="flex justify-between"><span class="text-white/60">模式进入</span><span id="m-mode-enter">-</span></div>
+                <div class="flex justify-between"><span class="text-white/60">选点耗时</span><span id="m-waypoint-dt">-</span></div>
+                <div class="flex justify-between"><span class="text-white/60">选路耗时</span><span id="m-route-dt">-</span></div>
+                <div class="flex justify-between"><span class="text-white/60">下发耗时</span><span id="m-dispatch-dt">-</span></div>
+                <div class="flex justify-between"><span class="text-white/60">候选路线数</span><span id="m-route-count">-</span></div>
+                <div class="flex justify-between"><span class="text-white/60">推荐路线数</span><span id="m-rec-count">-</span></div>
+                <button id="btn-export-metrics" class="w-full mt-2 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white transition">导出 JSON</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="toast" class="toast"></div>
 
     <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
@@ -406,7 +473,7 @@
         }
         function resetVehicle(){ carState.x=START_POS.x; carState.z=START_POS.z; carState.rotation=START_POS.rot; carState.velocity=0; carState.steering=0; carState.throttle=0; carState.gear=1; }
 
-        window.addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); if(k==='w'||e.key==='ArrowUp')keys.w=true; if(k==='a'||e.key==='ArrowLeft')keys.a=true; if(k==='s'||e.key==='ArrowDown')keys.s=true; if(k==='d'||e.key==='ArrowRight')keys.d=true; if(e.code==='Space'){keys.space=true;e.preventDefault();} if(k==='r')resetVehicle(); if(k==='c')toggleCameraMode(); });
+        window.addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); if(k==='w'||e.key==='ArrowUp')keys.w=true; if(k==='a'||e.key==='ArrowLeft')keys.a=true; if(k==='s'||e.key==='ArrowDown')keys.s=true; if(k==='d'||e.key==='ArrowRight')keys.d=true; if(e.code==='Space'){keys.space=true;e.preventDefault();} if(k==='r')resetVehicle(); if(k==='c')toggleCameraMode(); if(e.key==='Escape')exitRouteMode('esc'); if(e.shiftKey&&k==='l'){e.preventDefault();enterRouteMode('LANE');} if(e.shiftKey&&k==='n'){e.preventDefault();enterRouteMode('DEST');} });
         window.addEventListener('keyup',e=>{ const k=e.key.toLowerCase(); if(k==='w'||e.key==='ArrowUp')keys.w=false; if(k==='a'||e.key==='ArrowLeft')keys.a=false; if(k==='s'||e.key==='ArrowDown')keys.s=false; if(k==='d'||e.key==='ArrowRight')keys.d=false; if(e.code==='Space')keys.space=false; });
         const sb=(id,key)=>{ const b=document.getElementById(id); const s=e=>{e.preventDefault();ui[key]=true;b.classList.add('active');}; const en=e=>{e.preventDefault();ui[key]=false;b.classList.remove('active');}; b.addEventListener('mousedown',s); b.addEventListener('mouseup',en); b.addEventListener('mouseleave',en); b.addEventListener('touchstart',s); b.addEventListener('touchend',en); };
         sb('btn-up','up'); sb('btn-down','down'); sb('btn-left','left'); sb('btn-right','right');
@@ -514,7 +581,368 @@
             ctx.restore();
             // 缩放级别提示
             ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.font='9px Inter, sans-serif'; ctx.fillText('x'+mapZoom.toFixed(1), 4, h-4);
+            drawRouteOnMiniMap();
         }
+
+        // ============ ROUTE SELECTION SYSTEM (RA 插旗子重构) ============
+        const ROUTE = {
+            mode: 'NONE', status: 'idle', // idle | selectingDestination | selectingWaypoint | selectingRoute | confirmed
+            drivableArea: null, waypoint: null, destination: null,
+            routes: [], selectedRoute: null, hoveredRoute: null,
+            routeGroup: new THREE.Group(), labelGroup: [],
+            autoDrive: false, autoPath: [], autoIndex: 0, autoProgress: 0,
+            events: [], graph: null,
+            startTime: 0, waypointTime: 0, routeSelectTime: 0, dispatchTime: 0
+        };
+        scene.add(ROUTE.routeGroup);
+
+        function rdistance(a,b){ const dx=a.x-b.x, dz=a.z-b.z; return Math.sqrt(dx*dx+dz*dz); }
+        function rformatDistance(m){ if (m<1000) return Math.round(m)+'m'; return (m/1000).toFixed(2)+'km'; }
+
+        // ---- Road graph ----
+        function buildRoadGraph(){
+            const nodes=[], edges=[];
+            const step=20;
+            const add=(x,z,meta)=>{ nodes.push({x,z,idx:nodes.length,...meta}); return nodes.length-1; };
+            const mainIds=[];
+            for (let lane=0; lane<LANE_COUNT; lane++){
+                const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const laneIds=[];
+                for (let z=-MAIN_Z_HALF; z<=MAIN_Z_HALF+0.1; z+=step) laneIds.push(add(x,z,{lane,axis:'z'}));
+                mainIds.push(laneIds);
+            }
+            const crossIds=[];
+            INTERSECTIONS.forEach((zc,zi)=>{
+                const perZc=[];
+                for (let lane=0; lane<LANE_COUNT; lane++){
+                    const z=zc-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const laneIds=[];
+                    for (let x=-CROSS_X_HALF; x<=CROSS_X_HALF+0.1; x+=step) laneIds.push(add(x,z,{lane,axis:'x',zc}));
+                    perZc.push(laneIds);
+                }
+                crossIds.push(perZc);
+            });
+            mainIds.forEach(laneIds=>{ for (let i=0;i<laneIds.length-1;i++) edges.push([laneIds[i],laneIds[i+1],rdistance(nodes[laneIds[i]],nodes[laneIds[i+1]])]); });
+            crossIds.forEach(perZc=>{ perZc.forEach(laneIds=>{ for (let i=0;i<laneIds.length-1;i++) edges.push([laneIds[i],laneIds[i+1],rdistance(nodes[laneIds[i]],nodes[laneIds[i+1]])]); }); });
+            mainIds.forEach((laneIds,lane)=>{
+                INTERSECTIONS.forEach((zc,zi)=>{
+                    let best=-1, bestD=Infinity;
+                    laneIds.forEach(idx=>{ const d=Math.abs(nodes[idx].z-zc); if (d<bestD){bestD=d; best=idx;} });
+                    if (best===-1) return;
+                    crossIds[zi].forEach(crossLaneIds=>{
+                        crossLaneIds.forEach(idx=>{
+                            if (Math.abs(nodes[idx].x)<HALF+0.5 && Math.abs(nodes[idx].z-zc)<HALF+0.5){
+                                const d=rdistance(nodes[best],nodes[idx]); edges.push([best,idx,d]); edges.push([idx,best,d]);
+                            }
+                        });
+                    });
+                });
+            });
+            const adj=nodes.map(()=>[]); edges.forEach(([u,v,w])=>{ adj[u].push([v,w]); adj[v].push([u,w]); });
+            return {nodes,adj};
+        }
+        ROUTE.graph=buildRoadGraph();
+
+        function snapToGraph(x,z){
+            let best=-1, bestD=Infinity;
+            ROUTE.graph.nodes.forEach((n,i)=>{ const d=(n.x-x)*(n.x-x)+(n.z-z)*(n.z-z); if (d<bestD){bestD=d; best=i;} });
+            return best;
+        }
+        function dijkstra(startIdx,endIdx){
+            const n=ROUTE.graph.nodes.length; const dist=new Float32Array(n).fill(Infinity); const prev=new Int32Array(n).fill(-1); const vis=new Uint8Array(n);
+            dist[startIdx]=0;
+            for (let iter=0; iter<n; iter++){
+                let u=-1; for (let i=0;i<n;i++) if (!vis[i] && (u===-1 || dist[i]<dist[u])) u=i;
+                if (u===-1 || dist[u]===Infinity) break; vis[u]=1; if (u===endIdx) break;
+                ROUTE.graph.adj[u].forEach(([v,w])=>{ if (dist[u]+w<dist[v]){ dist[v]=dist[u]+w; prev[v]=u; } });
+            }
+            const path=[]; let cur=endIdx; while (cur!==-1){ path.unshift(ROUTE.graph.nodes[cur]); cur=prev[cur]; }
+            return path;
+        }
+        function pathLength(path){ let s=0; for (let i=1;i<path.length;i++) s+=rdistance(path[i-1],path[i]); return s; }
+        function crossesCenterLine(path){
+            let side=null; for (let i=0;i<path.length;i++){ if (path[i].axis!=='z') continue; const s=path[i].lane<2?'left':'right'; if (side===null) side=s; else if (side!==s) return true; }
+            return false;
+        }
+        function generateRoutes(){
+            const startIdx=snapToGraph(carState.x,carState.z);
+            const wpNode=ROUTE.waypoint && ROUTE.waypoint.userData ? ROUTE.waypoint.userData.graphNode : null;
+            const wpIdx = wpNode!==null ? wpNode : snapToGraph(ROUTE.waypoint.userData.pos.x, ROUTE.waypoint.userData.pos.z);
+            let destIdx;
+            if (ROUTE.mode==='LANE'){
+                const lane=Math.min(LANE_COUNT-1, Math.max(0, Math.round((carState.x+HALF)/LANE_WIDTH-0.5)));
+                const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const z=carState.z+400;
+                destIdx=snapToGraph(x,z);
+            } else {
+                destIdx=snapToGraph(ROUTE.destination.x,ROUTE.destination.z);
+            }
+            if (startIdx===-1 || wpIdx===-1 || destIdx===-1) { ROUTE.routes=[]; return; }
+
+            const startVariants=[startIdx];
+            const startNode=ROUTE.graph.nodes[startIdx];
+            if (startNode.axis==='z') for (let lane=0;lane<LANE_COUNT;lane++){ if (lane===startNode.lane) continue; const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const idx=snapToGraph(x,startNode.z); if (idx!==-1 && !startVariants.includes(idx)) startVariants.push(idx); }
+            const destVariants=[destIdx];
+            const destNode=ROUTE.graph.nodes[destIdx];
+            if (destNode.axis==='z') for (let lane=0;lane<LANE_COUNT;lane++){ if (lane===destNode.lane) continue; const x=-HALF+lane*LANE_WIDTH+LANE_WIDTH/2; const idx=snapToGraph(x,destNode.z); if (idx!==-1 && !destVariants.includes(idx)) destVariants.push(idx); }
+
+            const candidates=[]; let id=0;
+            startVariants.forEach(s=>{
+                destVariants.forEach(d=>{
+                    const p1=dijkstra(s,wpIdx); const p2=dijkstra(wpIdx,d);
+                    if (p1.length<2 || p2.length<2) return;
+                    const path=p1.concat(p2.slice(1)); path.forEach(p=>p.idx=p.idx); // keep idx
+                    const dist=pathLength(path); candidates.push({path,dist,id:id++,recommended:false,risks:[]});
+                });
+            });
+            const straight=rdistance(carState,ROUTE.waypoint.userData.pos);
+            const filtered=candidates.filter(r=>r.dist<=straight*3+100);
+            filtered.sort((a,b)=>a.dist-b.dist);
+            const seen=new Set(), unique=[];
+            filtered.forEach(r=>{ const key=r.path.map(p=>p.idx).join(','); if (!seen.has(key)){ seen.add(key); unique.push(r); } });
+            const final=unique.slice(0,5);
+            if (final.length>0){
+                const avg=final.reduce((s,r)=>s+r.dist,0)/final.length;
+                final.forEach((r,i)=>{
+                    r.risks=[];
+                    if (r.dist>avg*1.2) r.risks.push('路线过长');
+                    if (crossesCenterLine(r.path)) r.risks.push('压实线变道');
+                    if (!r.risks.length && i===0) r.recommended=true;
+                });
+            }
+            ROUTE.routes=final;
+            logEvent('route_generate',{count:final.length,distances:final.map(r=>r.dist),recommended:final.map(r=>r.recommended)});
+        }
+
+        // ---- Drivable area ----
+        function getDrivableWorldPolygon(){
+            const fwd=100, back=50, side=100;
+            const cos=Math.cos(carState.rotation), sin=Math.sin(carState.rotation);
+            const localToWorld=(lx,lz)=>({x:carState.x+lx*cos+lz*sin, z:carState.z-lx*sin+lz*cos});
+            return [localToWorld(-side,fwd), localToWorld(side,fwd), localToWorld(side,-back), localToWorld(-side,-back)];
+        }
+        function isInDrivableArea(x,z){
+            const dx=x-carState.x, dz=z-carState.z;
+            const cos=Math.cos(carState.rotation), sin=Math.sin(carState.rotation);
+            const lx=dx*cos-dz*sin, lz=dx*sin+dz*cos;
+            return Math.abs(lx)<=100 && lz>=-50 && lz<=100;
+        }
+        function createDrivableArea(){
+            const shape=new THREE.Shape();
+            shape.moveTo(-100,100); shape.lineTo(100,100); shape.lineTo(100,-50); shape.lineTo(-100,-50); shape.lineTo(-100,100);
+            const geom=new THREE.ShapeGeometry(shape);
+            const mat=new THREE.MeshBasicMaterial({color:0x4D87BA,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false});
+            const mesh=new THREE.Mesh(geom,mat); mesh.rotation.x=Math.PI/2; mesh.position.y=0.12; mesh.userData.isDrivable=true;
+            ROUTE.routeGroup.add(mesh); return mesh;
+        }
+        function updateDrivableArea(){ if (ROUTE.drivableArea){ ROUTE.drivableArea.position.x=carState.x; ROUTE.drivableArea.position.z=carState.z; ROUTE.drivableArea.rotation.y=carState.rotation; } }
+
+        // ---- Waypoint ----
+        function createWaypointMarker(){
+            const g=new THREE.Group();
+            const head=new THREE.Mesh(new THREE.SphereGeometry(0.5,16,16), new THREE.MeshBasicMaterial({color:0x05AC42}));
+            head.position.y=1.2; g.add(head);
+            const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.2,8), new THREE.MeshBasicMaterial({color:0x05AC42}));
+            stem.position.y=0.6; g.add(stem);
+            const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0,0.6,8), new THREE.MeshBasicMaterial({color:0x05AC42}));
+            pin.position.y=0.3; g.add(pin);
+            ROUTE.routeGroup.add(g); return g;
+        }
+        function setWaypoint(pos){
+            if (!ROUTE.waypoint) ROUTE.waypoint=createWaypointMarker();
+            ROUTE.waypoint.position.set(pos.x,0,pos.z); ROUTE.waypoint.visible=true;
+            const graphNode=snapToGraph(pos.x,pos.z); ROUTE.waypoint.userData={pos,graphNode};
+            ROUTE.waypointTime=performance.now(); ROUTE.status='selectingRoute';
+            logEvent('waypoint_select',{x:pos.x,z:pos.z,dt:(ROUTE.waypointTime-ROUTE.startTime)/1000});
+            generateRoutes(); drawRoutes();
+            showToast(`已生成 ${ROUTE.routes.length} 条候选路线`);
+        }
+
+        // ---- Route visualization ----
+        const raycaster=new THREE.Raycaster();
+        const groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+        function getMouseWorldPos(e){
+            const mouse=new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+            raycaster.setFromCamera(mouse,camera); const target=new THREE.Vector3();
+            return raycaster.ray.intersectPlane(groundPlane,target) ? {x:target.x,z:target.z} : null;
+        }
+        function clearRoutes(){
+            for (let i=ROUTE.routeGroup.children.length-1;i>=0;i--){ const c=ROUTE.routeGroup.children[i]; if (c.userData && c.userData.isRoute) ROUTE.routeGroup.remove(c); }
+            ROUTE.labelGroup.forEach(l=>l.label.remove()); ROUTE.labelGroup=[];
+        }
+        function drawRoutes(){
+            clearRoutes();
+            ROUTE.routes.forEach((r,idx)=>{
+                const pts=r.path.map(p=>new THREE.Vector3(p.x,0.35,p.z));
+                const curve=new THREE.CatmullRomCurve3(pts);
+                const geom=new THREE.TubeGeometry(curve,Math.max(16,pts.length*2),0.22,8,false);
+                const color=r.recommended?0x05AC42:0xCF7432;
+                const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.9});
+                const mesh=new THREE.Mesh(geom,mat); mesh.userData={isRoute:true,routeIdx:idx};
+                ROUTE.routeGroup.add(mesh); r.mesh=mesh;
+                // label
+                const mid=r.path[Math.floor(r.path.length/2)];
+                const div=document.createElement('div'); div.className='route-label';
+                div.innerHTML=`<div class="dist">${rformatDistance(r.dist)}</div>`+(r.risks.length?`<div class="risk">⚠ ${r.risks.join('、')}</div>`:'');
+                document.body.appendChild(div);
+                ROUTE.labelGroup.push({label:div,mid,idx});
+            });
+        }
+        function updateRouteLabels(){
+            ROUTE.labelGroup.forEach(item=>{
+                const p=new THREE.Vector3(item.mid.x,1.2,item.mid.z); p.project(camera);
+                const x=(p.x*0.5+0.5)*window.innerWidth; const y=(-p.y*0.5+0.5)*window.innerHeight;
+                item.label.style.transform=`translate(-50%, -120%)`;
+                item.label.style.left=x+'px'; item.label.style.top=y+'px';
+            });
+        }
+        function highlightRoute(idx){
+            ROUTE.routes.forEach((r,i)=>{ if (r.mesh) r.mesh.material.opacity=(i===idx||i===ROUTE.selectedRoute)?0.95:0.35; });
+        }
+        function onRouteMouseMove(e){
+            if (ROUTE.status!=='selectingRoute') return;
+            const mouse=new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+            raycaster.setFromCamera(mouse,camera);
+            const hits=raycaster.intersectObjects(ROUTE.routeGroup.children).filter(h=>h.object.userData.isRoute);
+            if (hits.length){ const idx=hits[0].object.userData.routeIdx; if (ROUTE.hoveredRoute!==idx){ ROUTE.hoveredRoute=idx; highlightRoute(idx); } }
+            else if (ROUTE.hoveredRoute!==null){ ROUTE.hoveredRoute=null; highlightRoute(ROUTE.selectedRoute); }
+        }
+        function onRouteClick(e){
+            if (ROUTE.status==='selectingWaypoint'){
+                const pos=getMouseWorldPos(e); if (!pos) return;
+                if (isInDrivableArea(pos.x,pos.z)) setWaypoint(pos);
+                else showToast('请在蓝色可行驶区域内选择路径点');
+                return;
+            }
+            if (ROUTE.status==='selectingDestination'){
+                const pos=getMouseWorldPos(e); if (!pos) return;
+                ROUTE.destination={x:pos.x,z:pos.z}; ROUTE.drivableArea=createDrivableArea(); ROUTE.status='selectingWaypoint';
+                showToast('已设定终点，请在蓝色可行驶区域内选择途经点');
+                return;
+            }
+            if (ROUTE.status!=='selectingRoute') return;
+            const mouse=new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+            raycaster.setFromCamera(mouse,camera);
+            const hits=raycaster.intersectObjects(ROUTE.routeGroup.children).filter(h=>h.object.userData.isRoute);
+            if (hits.length){ selectRoute(hits[0].object.userData.routeIdx); }
+        }
+        function selectRoute(idx){
+            ROUTE.selectedRoute=idx; ROUTE.routeSelectTime=performance.now();
+            const r=ROUTE.routes[idx];
+            logEvent('route_select',{idx,dist:r.dist,recommended:r.recommended});
+            highlightRoute(idx); openConfirmDialog();
+        }
+
+        // ---- Confirmation dialog ----
+        function openConfirmDialog(){
+            const r=ROUTE.routes[ROUTE.selectedRoute];
+            document.getElementById('dialog-dist').textContent=rformatDistance(r.dist);
+            const riskRow=document.getElementById('dialog-risk-row');
+            if (r.risks.length){ riskRow.classList.remove('hidden'); document.getElementById('dialog-risk').textContent=r.risks.join('、'); }
+            else riskRow.classList.add('hidden');
+            document.getElementById('route-dialog').classList.remove('hidden');
+        }
+        function closeConfirmDialog(){ document.getElementById('route-dialog').classList.add('hidden'); }
+
+        // ---- Auto drive ----
+        function startAutoDrive(path){
+            ROUTE.autoPath=path.map(p=>({x:p.x,z:p.z}));
+            ROUTE.autoIndex=0; ROUTE.autoProgress=0; ROUTE.autoDrive=true;
+        }
+        function updateAutoDrive(dt){
+            if (!ROUTE.autoDrive || ROUTE.autoPath.length<2) return;
+            const targetSpeed=40; // km/h
+            carState.velocity=THREE.MathUtils.lerp(carState.velocity,targetSpeed,dt*2);
+            carState.throttle=30; carState.braking=0;
+            const p1=ROUTE.autoPath[ROUTE.autoIndex]; const p2=ROUTE.autoPath[ROUTE.autoIndex+1];
+            const dx=p2.x-p1.x, dz=p2.z-p1.z; const segLen=Math.hypot(dx,dz);
+            ROUTE.autoProgress+=carState.speedMs*dt;
+            if (ROUTE.autoProgress>=segLen){
+                ROUTE.autoProgress-=segLen; ROUTE.autoIndex++;
+                if (ROUTE.autoIndex>=ROUTE.autoPath.length-1){ ROUTE.autoDrive=false; carState.velocity=0; carState.throttle=0; showToast('已到达目的地'); return; }
+            }
+            const t=Math.min(1,ROUTE.autoProgress/segLen);
+            carState.x=p1.x+dx*t; carState.z=p1.z+dz*t; carState.rotation=Math.atan2(dx,dz);
+            carState.steering=0;
+        }
+
+        // ---- Mode management ----
+        function enterRouteMode(mode){
+            if (ROUTE.mode!=='NONE') exitRouteMode('switch');
+            ROUTE.mode=mode; ROUTE.startTime=performance.now(); ROUTE.events=[]; ROUTE.autoDrive=false;
+            ROUTE.routes=[]; ROUTE.selectedRoute=null; ROUTE.hoveredRoute=null; ROUTE.waypoint=null; ROUTE.destination=null;
+            if (mode==='LANE'){ ROUTE.status='selectingWaypoint'; ROUTE.drivableArea=createDrivableArea(); ROUTE.destination={x:carState.x,z:carState.z+400}; }
+            else { ROUTE.status='selectingDestination'; }
+            logEvent('mode_enter',{mode});
+            document.getElementById('route-status').textContent=mode==='LANE'?'换车道：请在蓝色区域内选点':'新设终点：请先点击终点';
+            document.getElementById('btn-change-lane').classList.toggle('active',mode==='LANE');
+            document.getElementById('btn-new-dest').classList.toggle('active',mode==='DEST');
+            showToast(mode==='LANE'?'进入换车道模式':'进入新设终点模式');
+            updateMetricsPanel();
+        }
+        function exitRouteMode(reason){
+            if (ROUTE.mode==='NONE') return;
+            clearRoutes();
+            if (ROUTE.drivableArea){ ROUTE.routeGroup.remove(ROUTE.drivableArea); ROUTE.drivableArea=null; }
+            if (ROUTE.waypoint){ ROUTE.routeGroup.remove(ROUTE.waypoint); ROUTE.waypoint=null; }
+            logEvent('mode_exit',{mode:ROUTE.mode,reason});
+            ROUTE.mode='NONE'; ROUTE.status='idle'; ROUTE.autoDrive=false;
+            document.getElementById('route-status').textContent='未启动';
+            document.getElementById('btn-change-lane').classList.remove('active');
+            document.getElementById('btn-new-dest').classList.remove('active');
+            closeConfirmDialog();
+            updateMetricsPanel();
+        }
+
+        // ---- Data collection ----
+        function logEvent(type,data){ ROUTE.events.push({type,time:Date.now(),ts:performance.now(),data}); updateMetricsPanel(); }
+        function updateMetricsPanel(){
+            const last=(type)=>{ const e=ROUTE.events.slice().reverse().find(ev=>ev.type===type); return e?e.ts:null; };
+            const enter=last('mode_enter'), wp=last('waypoint_select'), sel=last('route_select'), disp=last('route_dispatch');
+            document.getElementById('m-mode-enter').textContent=enter?new Date(enter).toLocaleTimeString():'-';
+            document.getElementById('m-waypoint-dt').textContent=enter&&wp?((wp-enter)/1000).toFixed(2)+'s':'-';
+            document.getElementById('m-route-dt').textContent=wp&&sel?((sel-wp)/1000).toFixed(2)+'s':'-';
+            document.getElementById('m-dispatch-dt').textContent=sel&&disp?((disp-sel)/1000).toFixed(2)+'s':'-';
+            const gen=ROUTE.events.filter(e=>e.type==='route_generate').pop();
+            document.getElementById('m-route-count').textContent=gen?gen.data.count:'-';
+            document.getElementById('m-rec-count').textContent=gen?gen.data.recommended.filter(Boolean).length:'-';
+        }
+        function exportMetrics(){
+            const blob=new Blob([JSON.stringify(ROUTE.events,null,2)],{type:'application/json'});
+            const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='route_metrics.json'; a.click(); URL.revokeObjectURL(url);
+        }
+        function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+
+        // ---- Minimap route overlay ----
+        function drawRouteOnMiniMap(){
+            if (ROUTE.mode==='NONE') return;
+            if (ROUTE.drivableArea){
+                mapCtx.fillStyle='rgba(77,135,186,0.35)'; const pts=getDrivableWorldPolygon();
+                mapCtx.beginPath(); pts.forEach((p,i)=>{ if (i===0) mapCtx.moveTo(w2mx(p.x),w2mz(p.z)); else mapCtx.lineTo(w2mx(p.x),w2mz(p.z)); });
+                mapCtx.closePath(); mapCtx.fill();
+            }
+            if (ROUTE.destination){ mapCtx.fillStyle='#CF7432'; const dx=w2mx(ROUTE.destination.x), dz=w2mz(ROUTE.destination.z); mapCtx.beginPath(); mapCtx.arc(dx,dz,4,0,Math.PI*2); mapCtx.fill(); }
+            if (ROUTE.waypoint && ROUTE.waypoint.userData && ROUTE.waypoint.userData.pos){
+                mapCtx.fillStyle='#05AC42'; const wx=w2mx(ROUTE.waypoint.userData.pos.x), wz=w2mz(ROUTE.waypoint.userData.pos.z);
+                mapCtx.beginPath(); mapCtx.arc(wx,wz,4,0,Math.PI*2); mapCtx.fill();
+            }
+            ROUTE.routes.forEach(r=>{
+                mapCtx.strokeStyle=r.recommended?'#05AC42':'#CF7432'; mapCtx.lineWidth=r.recommended?2.5:1.5;
+                mapCtx.beginPath(); r.path.forEach((p,j)=>{ if (j===0) mapCtx.moveTo(w2mx(p.x),w2mz(p.z)); else mapCtx.lineTo(w2mx(p.x),w2mz(p.z)); });
+                mapCtx.stroke();
+            });
+        }
+
+        // ---- Event wiring ----
+        document.getElementById('btn-change-lane').addEventListener('click',()=>enterRouteMode('LANE'));
+        document.getElementById('btn-new-dest').addEventListener('click',()=>enterRouteMode('DEST'));
+        document.getElementById('btn-exit-route').addEventListener('click',()=>exitRouteMode('button'));
+        document.getElementById('dialog-confirm').addEventListener('click',()=>{
+            const r=ROUTE.routes[ROUTE.selectedRoute]; ROUTE.dispatchTime=performance.now();
+            logEvent('route_dispatch',{dist:r.dist,recommended:r.recommended,options:{pickup:document.getElementById('opt-pickup').checked,blacklist:document.getElementById('opt-blacklist').checked}});
+            closeConfirmDialog(); startAutoDrive(r.path); exitRouteMode('dispatch'); showToast('路线已下发，车辆开始自动驾驶');
+        });
+        document.getElementById('dialog-cancel').addEventListener('click',closeConfirmDialog);
+        document.getElementById('btn-export-metrics').addEventListener('click',exportMetrics);
+        renderer.domElement.addEventListener('click',onRouteClick);
+        renderer.domElement.addEventListener('mousemove',onRouteMouseMove);
 
         // ============ HUD ============
         const speedEl=document.getElementById('speed'), throttleEl=document.getElementById('throttle'), steeringEl=document.getElementById('steering'), gearEl=document.getElementById('gear');
@@ -525,7 +953,7 @@
         function animate(){
             requestAnimationFrame(animate);
             const dt=Math.min(clock.getDelta(),0.05);
-            updateControls(dt); updateTraffic(dt); updateTrafficLights(dt); updateCamera(); updateHUD(); drawMiniMap();
+            updateControls(dt); updateTraffic(dt); updateTrafficLights(dt); updateCamera(); updateDrivableArea(); updateAutoDrive(dt); updateHUD(); updateRouteLabels(); drawMiniMap();
             ego.mesh.position.set(carState.x,0,carState.z); ego.mesh.rotation.y=carState.rotation;
             const ws=carState.speedMs*2.5; ego.wheels.forEach(w=>w.rotation.x+=ws*dt); const sa=THREE.MathUtils.degToRad(carState.steering); ego.wheels[0].rotation.y=sa; ego.wheels[1].rotation.y=sa;
             if(ego.mesh.userData.lidarRing&&ego.mesh.userData.lidarRing.visible) ego.mesh.userData.lidarRing.rotation.x+=dt*4;
