@@ -428,6 +428,33 @@
             ctx.fillStyle='#2a2a3a'; ctx.fillRect(w2mx(-HALF),w2mz(-MAIN_Z_HALF),HALF*2/RANGE_X*w,HALF*2/RANGE_Z*h);
             // 交叉路
             INTERSECTIONS.forEach(zc=>{ ctx.fillRect(w2mx(-CROSS_X_HALF),w2mz(zc-HALF),(CROSS_X_HALF*2)/RANGE_X*w,(HALF*2)/RANGE_Z*h); });
+
+            // ===== 车道线 =====
+            // 主路纵向车道线（沿 Z 方向）：x = -LANE_WIDTH, 0, +LANE_WIDTH
+            const xs = [-LANE_WIDTH, 0, LANE_WIDTH];
+            // 主路可绘制 z 区段（避开十字路口）
+            let cursor = -MAIN_Z_HALF; const segZ = [];
+            INTERSECTIONS.slice().sort((a,b)=>a-b).forEach(zc=>{ segZ.push([cursor, zc-HALF]); cursor=zc+HALF; });
+            segZ.push([cursor, MAIN_Z_HALF]);
+            ctx.lineWidth = 1;
+            xs.forEach(x=>{
+                ctx.strokeStyle = (x===0) ? '#fbbf24' : '#cbd5e1';      // 中心黄线 / 白色虚线
+                ctx.setLineDash(x===0 ? [] : [3,3]);
+                segZ.forEach(([z0,z1])=>{
+                    const mx=w2mx(x), mz0=w2mz(z0), mz1=w2mz(z1);
+                    ctx.beginPath(); ctx.moveTo(mx,mz0); ctx.lineTo(mx,mz1); ctx.stroke();
+                });
+            });
+            // 交叉路横向车道线（沿 X 方向，避开主路）
+            ctx.strokeStyle='#cbd5e1'; ctx.setLineDash([3,3]);
+            INTERSECTIONS.forEach(zc=>{
+                [-LANE_WIDTH,0,LANE_WIDTH].forEach(zoff=>{
+                    const mz=w2mz(zc+zoff);
+                    ctx.beginPath(); ctx.moveTo(w2mx(-CROSS_X_HALF),mz); ctx.lineTo(w2mx(-HALF),mz); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(w2mx(HALF),mz); ctx.lineTo(w2mx(CROSS_X_HALF),mz); ctx.stroke();
+                });
+            });
+            ctx.setLineDash([]);
             // 交通车
             trafficCars.forEach(car=>{ const mx=w2mx(car.mesh.position.x), mz=w2mz(car.mesh.position.z); ctx.fillStyle=car.cross?'#f59e0b':'#3b82f6'; ctx.fillRect(mx-1.5,mz-2,3,4); });
             // 自车
