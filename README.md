@@ -22,3 +22,5 @@
 - 接入真实传感器模型（相机 / LiDAR / Radar 点云）
 - 场景域描述（OpenSCENARIO / 地图格式）
 - 实车/仿真闭环（与 Apollo / Autoware 对接）
+
+<!-- deployed via Pages -->
